@@ -1,0 +1,45 @@
+{
+  "nodes": {
+    "hylki-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792882799,
+        "narHash": "sha256-1DFvzFbcDwq0rsOexGFISu0k+sTcKACKqSjlWE4n0M0=",
+        "owner": "hyprlab",
+        "repo": "hylki",
+        "rev": "78dc96a1acc85a368e667087cb422b7f1b500585",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hyprlab",
+        "ref": "v1.45.3",
+        "repo": "hylki",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1792773339,
+        "narHash": "sha256-rZLrzrC6i+jnTAlvPZHogKDulY7WWDEv9hJeHieO7Zw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3ec636362e1816bc2f0888fa0fa2c69f1bc9e504",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "hylki-src": "hylki-src",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

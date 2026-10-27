@@ -1,0 +1,106 @@
+name: CI
+
+# Pushes and pull requests check the pinned hylki release. The scheduled run
+# follows upstream: when its latest release is not the pinned one, it pins
+# that release, builds it and runs its tests on both architectures, and
+# commits the new pin only if both pass. A release that fails is not
+# committed, so the flake keeps the last one that worked, and the next
+# scheduled run tries the latest release again.
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Look for a new release
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.latest.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare the latest release with the pinned one
+        id: latest
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pinned="$(sed -n 's|.*"github:hyprlab/hylki/\(.*\)".*|\1|p' flake.nix)"
+          if [ -z "$pinned" ]; then
+            echo "flake.nix pins no github:hyprlab/hylki release" >&2
+            exit 1
+          fi
+          # `latest` is the newest release that is neither a draft nor a
+          # prerelease, so the -beta.N tags are never picked up.
+          latest="$(gh api repos/hyprlab/hylki/releases/latest --jq .tag_name)"
+          echo "pinned $pinned, latest $latest"
+          if ! [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "unexpected release tag: $latest" >&2
+            exit 1
+          fi
+          if [ "$latest" != "$pinned" ]; then
+            echo "tag=$latest" >> "$GITHUB_OUTPUT"
+          fi
+
+  check:
+    name: Build and test (${{ matrix.runner }})
+    needs: release
+    # Without a new release, a scheduled run would only rebuild what the last
+    # one already checked.
+    if: github.event_name != 'schedule' || needs.release.outputs.tag != ''
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Pin ${{ needs.release.outputs.tag }}
+        if: needs.release.outputs.tag != ''
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          sed -i "s|\"github:hyprlab/hylki/.*\"|\"github:hyprlab/hylki/$TAG\"|" flake.nix
+          nix flake update hylki-src
+          git diff
+      - name: Check the flake
+        # Builds the package for this architecture, which runs its Rust tests.
+        run: nix flake check --no-update-lock-file --print-build-logs
+
+  commit:
+    name: Commit ${{ needs.release.outputs.tag }}
+    needs: [release, check]
+    if: needs.release.outputs.tag != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      # Pinned as in the check jobs: a release tag locks to the same commit
+      # and hash each time, so this commits what they tested.
+      - name: Pin ${{ needs.release.outputs.tag }}
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          sed -i "s|\"github:hyprlab/hylki/.*\"|\"github:hyprlab/hylki/$TAG\"|" flake.nix
+          nix flake update hylki-src
+          git diff
+      - name: Commit and push
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "chore(hylki): update to $TAG"
+          git push origin "HEAD:$GITHUB_REF"
