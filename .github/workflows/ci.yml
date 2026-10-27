@@ -24,7 +24,7 @@ jobs:
     outputs:
       tag: ${{ steps.latest.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Compare the latest release with the pinned one
         id: latest
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -62,7 +62,7 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
       - name: Pin ${{ needs.release.outputs.tag }}
         if: needs.release.outputs.tag != ''
@@ -85,7 +85,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
       # Pinned as in the check jobs: a release tag locks to the same commit
       # and hash each time, so this commits what they tested.
