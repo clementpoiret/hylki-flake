@@ -6,7 +6,7 @@
     # The packaged release. CI moves this tag to each new upstream release
     # once it builds and passes its tests.
     hylki-src = {
-      url = "github:hyprlab/hylki/v1.46.0";
+      url = "github:hyprlab/hylki/v1.46.1";
       flake = false;
     };
   };
