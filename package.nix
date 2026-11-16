@@ -17,6 +17,7 @@
   shared-mime-info,
   gnupg,
   xdg-utils,
+  gst_all_1,
 }:
 
 rustPlatform.buildRustPackage {
@@ -44,6 +45,12 @@ rustPlatform.buildRustPackage {
     poppler
     openssl
     wayland
+    # Sounds play through GStreamer's playbin, which hylki loads at run time.
+    # Listed here so wrapGAppsHook4 (and the tests) find the plugins: playbin
+    # is in -base, the audio sinks in -good.
+    gst_all_1.gstreamer
+    gst_all_1.gst-plugins-base
+    gst_all_1.gst-plugins-good
   ];
 
   nativeCheckInputs = [ gnupg ];
