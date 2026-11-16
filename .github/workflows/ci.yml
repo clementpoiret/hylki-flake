@@ -1,11 +1,13 @@
 name: CI
 
-# Pushes and pull requests check the pinned hylki release. The scheduled run
-# follows upstream: when its latest release is not the pinned one, it pins
-# that release, builds it and runs its tests on both architectures, and
-# commits the new pin only if both pass. A release that fails is not
-# committed, so the flake keeps the last one that worked, and the next
-# scheduled run tries the latest release again.
+# Pushes and pull requests check the flake as pinned. The scheduled run
+# follows upstream on two inputs: it pins hylki's latest release when that is
+# not the pinned one, and moves nixpkgs to the head of nixos-unstable, which
+# is what most users of the flake build against through `follows`. When
+# either changed, it builds and tests the result on both architectures and
+# commits it only if both pass. An update that fails is not committed, so the
+# flake keeps the last pins that worked, and the next scheduled run tries
+# again from the latest of both.
 
 on:
   push:
@@ -18,15 +20,18 @@ permissions:
   contents: read
 
 jobs:
-  release:
-    name: Look for a new release
+  update:
+    name: Look for updates
     runs-on: ubuntu-24.04
     outputs:
-      tag: ${{ steps.latest.outputs.tag }}
+      changed: ${{ steps.update.outputs.changed }}
+      message: ${{ steps.update.outputs.message }}
     steps:
       - uses: actions/checkout@v7
-      - name: Compare the latest release with the pinned one
-        id: latest
+      - uses: cachix/install-nix-action@v31
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      - name: Pin the latest release and nixpkgs
+        id: update
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,15 +50,46 @@ jobs:
             exit 1
           fi
           if [ "$latest" != "$pinned" ]; then
-            echo "tag=$latest" >> "$GITHUB_OUTPUT"
+            sed -i "s|\"github:hyprlab/hylki/.*\"|\"github:hyprlab/hylki/$latest\"|" flake.nix
+            nix flake update hylki-src
           fi
+
+          old_nixpkgs="$(jq -r .nodes.nixpkgs.locked.rev flake.lock)"
+          nix flake update nixpkgs
+          new_nixpkgs="$(jq -r .nodes.nixpkgs.locked.rev flake.lock)"
+          echo "nixpkgs ${old_nixpkgs:0:12} -> ${new_nixpkgs:0:12}"
+
+          hylki_moved=$([ "$latest" != "$pinned" ] && echo y || true)
+          nixpkgs_moved=$([ "$new_nixpkgs" != "$old_nixpkgs" ] && echo y || true)
+          if [ -n "$hylki_moved" ] && [ -n "$nixpkgs_moved" ]; then
+            message="chore(flake): update hylki to $latest and nixpkgs to ${new_nixpkgs:0:12}"
+          elif [ -n "$hylki_moved" ]; then
+            message="chore(hylki): update to $latest"
+          elif [ -n "$nixpkgs_moved" ]; then
+            message="chore(nixpkgs): update to ${new_nixpkgs:0:12}"
+          else
+            exit 0
+          fi
+          git diff
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "message=$message" >> "$GITHUB_OUTPUT"
+      # nixos-unstable moves while the checks run, so the check and commit
+      # jobs take this exact lock rather than updating again: what is
+      # committed is what was tested.
+      - uses: actions/upload-artifact@v7
+        if: steps.update.outputs.changed == 'true'
+        with:
+          name: flake-update
+          path: |
+            flake.nix
+            flake.lock
 
   check:
     name: Build and test (${{ matrix.runner }})
-    needs: release
-    # Without a new release, a scheduled run would only rebuild what the last
-    # one already checked.
-    if: github.event_name != 'schedule' || needs.release.outputs.tag != ''
+    needs: update
+    # Without an update, a scheduled run would only rebuild what the last one
+    # already checked.
+    if: github.event_name != 'schedule' || needs.update.outputs.changed == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
@@ -64,43 +100,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
-      - name: Pin ${{ needs.release.outputs.tag }}
-        if: needs.release.outputs.tag != ''
-        env:
-          TAG: ${{ needs.release.outputs.tag }}
-        run: |
-          sed -i "s|\"github:hyprlab/hylki/.*\"|\"github:hyprlab/hylki/$TAG\"|" flake.nix
-          nix flake update hylki-src
-          git diff
+      - uses: actions/download-artifact@v8
+        if: needs.update.outputs.changed == 'true'
+        with:
+          name: flake-update
+      - name: Show the update
+        if: needs.update.outputs.changed == 'true'
+        run: git diff
       - name: Check the flake
         # Builds the package for this architecture, which runs its Rust tests.
         run: nix flake check --no-update-lock-file --print-build-logs
 
   commit:
-    name: Commit ${{ needs.release.outputs.tag }}
-    needs: [release, check]
-    if: needs.release.outputs.tag != ''
+    name: Commit the update
+    needs: [update, check]
+    if: needs.update.outputs.changed == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v31
-      # Pinned as in the check jobs: a release tag locks to the same commit
-      # and hash each time, so this commits what they tested.
-      - name: Pin ${{ needs.release.outputs.tag }}
-        env:
-          TAG: ${{ needs.release.outputs.tag }}
-        run: |
-          sed -i "s|\"github:hyprlab/hylki/.*\"|\"github:hyprlab/hylki/$TAG\"|" flake.nix
-          nix flake update hylki-src
-          git diff
+      - uses: actions/download-artifact@v8
+        with:
+          name: flake-update
       - name: Commit and push
         env:
-          TAG: ${{ needs.release.outputs.tag }}
+          MESSAGE: ${{ needs.update.outputs.message }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -am "chore(hylki): update to $TAG"
+          git commit -am "$MESSAGE"
           git push origin "HEAD:$GITHUB_REF"
