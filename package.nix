@@ -13,6 +13,7 @@
   webkitgtk_6_0,
   poppler,
   openssl,
+  sqlcipher,
   wayland,
   shared-mime-info,
   gnupg,
@@ -44,6 +45,10 @@ rustPlatform.buildRustPackage {
     webkitgtk_6_0
     poppler
     openssl
+    # The mail cache is SQLCipher. Upstream builds the copy rusqlite bundles,
+    # but nixpkgs' cargo setup hook sets LIBSQLITE3_SYS_USE_PKG_CONFIG, which
+    # makes libsqlite3-sys link the system library instead.
+    sqlcipher
     wayland
     # Sounds play through GStreamer's playbin, which hylki loads at run time.
     # Listed here so wrapGAppsHook4 (and the tests) find the plugins: playbin
