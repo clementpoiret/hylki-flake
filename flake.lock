@@ -3,27 +3,27 @@
     "hylki-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1794936276,
-        "narHash": "sha256-YU+OWRjIPn1PyIoa+Vyg/gKp4B9RyUOje9IOWLkUDR8=",
+        "lastModified": 1795109644,
+        "narHash": "sha256-IbeOH61qO3v+cSoPxzp7ELJMEEW5hJEhgjqomU6Rf7Q=",
         "owner": "hyprlab",
         "repo": "hylki",
-        "rev": "a4fbd3d1f41bd65b912822b67e2dd5fd5af44ef6",
+        "rev": "2fb505469f4c7b5122402fd2fb73715334ea7971",
         "type": "github"
       },
       "original": {
         "owner": "hyprlab",
-        "ref": "v1.48.4",
+        "ref": "v1.49.0",
         "repo": "hylki",
         "type": "github"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1794890597,
-        "narHash": "sha256-lME2lHoDHAaSHP3/okgiVoJ0icVEvsQH8LeU3We7tcc=",
+        "lastModified": 1795085501,
+        "narHash": "sha256-S5keGWzaKpuXo9MNoIC2FfTIuTyTnx8P4NhYJMEsTLI=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "04906337b6d53e8bb0eaf0470ae9f070a4d4eb55",
+        "rev": "0bb8272318b4ca41bf0edc6224df3e3e3046b70d",
         "type": "github"
       },
       "original": {
